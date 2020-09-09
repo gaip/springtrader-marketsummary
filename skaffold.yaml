@@ -1,20 +1,41 @@
-apiVersion: skaffold/v2beta2
+apiVersion: skaffold/v1beta12
 kind: Config
 build:
   artifacts:
-  - image: marketsummary
-    context: .
+  - image: springtrader
+    docker:
+      target: runner
+      cacheFrom:
+        - harbor.toolchain.lead.prod.liatr.io/flywheel/springtrader-builder:latest
+        - harbor.toolchain.lead.prod.liatr.io/flywheel/springtrader-runner:latest
+  - image: sqlfdb
+    docker:
+      target: sqlfdb
+      cacheFrom:
+        - harbor.toolchain.lead.prod.liatr.io/flywheel/springtrader-builder:latest
+        - harbor.toolchain.lead.prod.liatr.io/flywheel/springtrader-runner:latest
+  local: {}
 deploy:
   helm:
+    flags:
+      upgrade: ["--timeout", "600s"]
+      install: ["--timeout", "600s"]
     releases:
-      - name: marketsummary
+      - name: springtrader 
+        chartPath: ./charts/springtrader
         wait: true
-        chartPath: ./charts/marketsummary
         values:
-          image: marketsummary
+          image: springtrader 
+          sqlfdb: sqlfdb 
         setValueTemplates:
           istioDomain: "{{.ISTIO_DOMAIN}}"
           productName: "{{.PRODUCT_NAME}}"
-          nodeEnv: "{{.NODE_ENV}}"
-        setValues:
-          hpa.enabled: true
+profiles:
+- name: kind
+  activation:
+  - kubeContext: kind-kind
+  patches:
+  - op: add
+    path: /deploy/helm/releases/0/setValues
+    value: 
+      storageClassName: standard
